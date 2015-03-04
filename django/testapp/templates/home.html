@@ -1,0 +1,138 @@
+{% extends "splunkdj:base_with_app_bar.html" %}
+
+{% load splunkmvc %}
+
+{% block title %}{{app_name}} Home Page{% endblock title %}
+
+{% block css %}
+    <link rel="stylesheet" type="text/css" href="{{STATIC_URL}}{{app_name}}/custom.css" />
+    <link rel="stylesheet" type="text/css" href="{{STATIC_URL}}{{app_name}}/custom.css" />
+    <link rel="stylesheet" type="text/css" href="{{STATIC_URL}}splunkjs/css/dashboard.css" />
+{% endblock css %}
+
+{% block content %}
+<div class="dashboard-body container-fluid main-section-body" data-role="main">
+    <div class="dashboard-header clearfix">
+        <h2>Dashboard</h2>
+        <p class="description">Select the data to view, and instantly get the corresponding visualisations</p>
+    </div>
+    <div class="dashboard-row dashboard-row1">
+        <div class="dashboard-cell" style="width: 100%;">
+            <div class="dashboard-panel ">
+                <div class="dashboard-element">
+                    <div class="panel-head">
+                        <h3>Select file to get data</h3>
+                    </div>
+                    <div class="panel-body">
+                        {% dropdown
+                            id="dropdown_files_choices"
+                            value="$file$"|token_safe 
+                            showClearButton=False
+                            default="researchers.csv"
+                        %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Row 2 -->
+    <div class="dashboard-row dashboard-row2">
+        <div class="dashboard-cell" style="width: 50%;">
+            <div class="dashboard-panel ">
+                <div class="panel-element-row">
+                    <div class="dashboard-element table" style="width: 100%">
+                        <div class="panel-head">
+                            <h3>Graph representation</h3>
+                        </div>
+                        <div class="panel-body">
+                            {% chart
+                                id="chart_result" 
+                                managerid="search_per_population"
+                                drilldown=True
+                                drilldownRedirect=True
+                            %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="dashboard-cell" style="width: 50%;">
+            <div class="dashboard-panel ">
+                <div class="panel-element-row">
+                    <div class="dashboard-element table" style="width: 100%">
+                        <div class="panel-head">
+                            <h3>Visualising on a map</h3>
+                        </div>
+                        <div class="panel-body">
+                            {% splunkmap
+                                id="map_result"
+                                managerid="search_show_data_on_map"
+                                drilldown=True
+                                drilldownRedirect=True
+                            %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content%}
+
+{% block managers %}
+
+    {% searchmanager
+        id="search_file_basic"
+        search="|inputlookup $file$ | fields - SNo. | rename main as $main_token$"|token_safe
+        cache=False
+    %}
+
+    {% postprocessmanager
+        id="search_per_population"
+        managerid="search_file_basic"
+        search="|fields - Latitude, Longitude"
+    %}
+
+    {% postprocessmanager
+        id="search_show_data_on_map"
+        managerid="search_file_basic"
+        search="|rename Latitude as lat Longitude as lon | geostats count"
+    %}
+
+{% endblock %}
+
+
+{% block js %}    
+    <script type="text/javascript">
+        var deps = [
+            "splunkjs/ready!",
+        //  "splunkjs/mvc/radiogroup"
+            "splunkjs/mvc/radiogroupview"
+        ];
+        var file_selector = null;
+        require(deps, function(mvc){
+            
+            var defaultTokenModel = mvc.Components.get("default");
+            file_selector = mvc.Components.getInstance("dropdown_files_choices");
+            
+            var main_tokens = {}
+            var files = [];
+            {% for file in data_files_list %}
+                files.push({
+                        "label": "{{ file.name }}",
+                        "value": "{{ file.name }}"
+                    }
+                );
+                main_tokens['{{ file.name }}'] = '{{ file.main_token }}';
+            {% endfor %}
+            
+            file_selector.settings.set("choices", files);
+            defaultTokenModel.set({"main_token": main_tokens[files[0].value]});           
+
+            defaultTokenModel.on("change:file", function(newFileName, fileName, options){
+                defaultTokenModel.set({"main_token": main_tokens[fileName]});
+            });
+        });
+
+    </script>
+{% endblock js %}
